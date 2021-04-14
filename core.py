@@ -22,20 +22,23 @@ class Core:
         # read the growth rate csv
         try:
             # read growth rate
-            growth_rate = pd.read_csv('./Italy_Covid_2020/growth_rate.csv')
+            # growth_rate = pd.read_csv('./Italy_Covid_2020/growth_rate.csv')
             # read case by infection
             # case_by_infection = pd.read_csv('./Italy_Covid_2020/cases_by_infection.csv')
-
-            reported_case = pd.read_csv('./Italy_Covid_2020/reported_cases.csv')
-
+            # italy reported case
+            reported_case = pd.read_csv('./Italy_Covid_2021/reported_cases.csv')
+            # italy region summary
+            italy_summary_table = pd.read_csv('./Italy_Covid_2021/summary_table.csv')
+            # country reported case
             covid_march = pd.read_csv('./Italy_Covid_2020/owid.csv')
+
         except FileNotFoundError as e:
             # set notification error
             print(e.filename)
             return []
         else:
 
-            return [growth_rate, reported_case, covid_march]
+            return [reported_case, covid_march, italy_summary_table]
 
         # get region function
         # this function gets and return all the regions
@@ -49,12 +52,34 @@ class Core:
     # get all the european countries
     def get_european_countries(self):
         if len(self._data) > 0:
-            df = self._data[2]
+            df = self._data[1]
             df1 = df.loc[df['continent'] == 'Europe']
 
             return df1['location'].unique()
 
         return ["None"]
+
+    # Summary table
+    # get italy region summary
+    def getRegionSummary(self, name):
+        # empty dictionary
+        s = {}
+        # data frame
+        df = self._data[2]
+
+        # extract the data
+        try:
+            # get region summary
+            row = df.loc[df['Region'] == name]
+            # get index
+            index = df.index[df['Region'] == name][0]
+            s['newConfirmed'] = row['New confirmed cases by infection date'][index]
+            s['expectedChanges'] = row['Expected change in daily cases'][index]
+        except KeyError:
+            s['newConfirmed'] = "Unknown"
+            s['expectedChanges'] = "Unknown"
+
+        return s
 
     # this function gets and display country statistic
     def getRegionStats(self, name):
@@ -64,6 +89,8 @@ class Core:
         case_number = self.get_case_number(name)
         # calculate percentage
         cal_percentage = self.get_percentage(case_number, region_population)
+        # get region summary
+        summary_table = self.getRegionSummary(name)
 
         if region_population and case_number and cal_percentage is not None:
             return {
@@ -71,6 +98,8 @@ class Core:
                 "population": regions['Italy'],
                 "region_population": region_population,
                 "case_number": case_number,
+                "newConfirmed": summary_table['newConfirmed'],
+                "expectedChanges": summary_table['expectedChanges'],
                 "percentage": round(cal_percentage, 1)
             }
         else:
@@ -102,7 +131,7 @@ class Core:
             # total number of case
             case_sum = 0
             # list of case
-            all_case = self._data[1]
+            all_case = self._data[0]
             # get name and index from list
             for index, re in enumerate(all_case['region']):
                 # check if name == name
@@ -153,7 +182,7 @@ class Core:
     # This function accept country name and return an array of population and max infection case
     def find_data_by_Country(self, country):
         if len(self._data) > 0:
-            df = self._data[2]
+            df = self._data[1]
             df1 = df.loc[df['location'] == country]
 
             try:

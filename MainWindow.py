@@ -13,14 +13,15 @@ import io
 import folium
 from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox,
                              QMessageBox, QDialog)
-from PyQt5.QtGui import QFont, QPainter
+from PyQt5.QtGui import QFont
 import PyQt5.QtCore as qt
 # import web engine widget
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 # core module
 from core import *
-
-from pyqtlet import L, MapWidget
+# version:  googletrans-3.1.0a0
+from googletrans import Translator
+from regions import coordinate
 
 
 # main window
@@ -33,6 +34,7 @@ class MainWindow(QWidget):
         # self.setStyleSheet("background-color: #ece2e1;color:#000;")
         # core
         self.core = Core()
+        # translate function
         # list of italy regions
         self.italy_regions = self.core.get_region()
         # list of european region
@@ -43,9 +45,9 @@ class MainWindow(QWidget):
     # initialSetup
     def initialSetup(self):
         # set title
-        self.setWindowTitle("Italy Covid Report")
+        self.setWindowTitle("Italy Covid Report 2021")
         # set window screen
-        self.setFixedSize(1000, 400)
+        self.setFixedSize(1300, 800)
         # show content
         self.contentWidget()
 
@@ -58,54 +60,116 @@ class MainWindow(QWidget):
         # selection one notice
         select_region_h_box1.addSpacing(10)
         # selection label 1
-        select_region_label = QLabel("Select Region", self)
-        select_region_h_box1.addWidget(select_region_label)
+        self.select_region_label = QLabel("Select Region", self)
+        select_region_h_box1.addWidget(self.select_region_label)
         # drop down button
         self.select_region_combo = QComboBox(self)
         self.select_region_combo.addItems(self.italy_regions)
         select_region_h_box1.addWidget(self.select_region_combo)
         # push button
-        select_region_botton = QPushButton("Check Region", self)
-        select_region_botton.pressed.connect(self.italyRegionClicked)
-        select_region_h_box1.addWidget(select_region_botton)
+        self.select_region_botton = QPushButton("Check Region", self)
+        self.select_region_botton.pressed.connect(self.italyRegionClicked)
+        select_region_h_box1.addWidget(self.select_region_botton)
 
         # select region v box 2
         select_region_h_box2 = QHBoxLayout()
         select_region_h_box2.addSpacing(10)
         # selection label 1
-        select_region_label = QLabel("Italy against", self)
-        select_region_h_box2.addWidget(select_region_label)
+        self.select_region_label = QLabel("Italy against", self)
+        select_region_h_box2.addWidget(self.select_region_label)
 
         # drop down button (combo )
         self.select_euro_combo = QComboBox(self)
         self.select_euro_combo.addItems(self.european_countries)
         select_region_h_box2.addWidget(self.select_euro_combo)
         # push button
-        compare_button = QPushButton("Compare", self)
-        compare_button.pressed.connect(self.europeanCountriesClicked)
-        select_region_h_box2.addWidget(compare_button)
+        self.compare_button = QPushButton("Compare", self)
+        self.compare_button.pressed.connect(self.europeanCountriesClicked)
+        select_region_h_box2.addWidget(self.compare_button)
 
         # selection main V box
         select_region_main_v_box = QVBoxLayout()
-        italy_lbl = QLabel("Italy Region Covid Report", self)
-        italy_lbl.setStyleSheet("border: 0.5px solid gray")
-        select_region_main_v_box.addWidget(italy_lbl)
+
+        # An overall language pull down menu is being requested at the very top of the GUI
+        # with the option of English and Italian labelling
+        language_h_box = QHBoxLayout()
+        self.language_lbl = QLabel("Select Language", self)
+        self.language_combobox = QComboBox()
+        # language option
+        options = ([('English', 'en'), ('Italian', 'it'), ('Spanish', 'es'), ('Chinese', 'zh-CN'), ])
+        # add language and change language
+        for i, (text, lang) in enumerate(options):
+            self.language_combobox.addItem(text)
+            self.language_combobox.setItemData(i, lang)
+
+        language_h_box.addWidget(self.language_lbl)
+        # on index changed
+        self.language_combobox.currentIndexChanged.connect(self.languageChanged)
+
+        language_h_box.addWidget(self.language_combobox)
+        language_h_box.addStretch()
+        # add  language_h_box layout
+        select_region_main_v_box.addLayout(language_h_box)
+
+        # Italy Region Covid Report
+        self.italy_lbl = QLabel("Italy Region Covid Report", self)
+        self.italy_lbl.setStyleSheet("border: 0.5px solid gray")
+        select_region_main_v_box.addWidget(self.italy_lbl)
         select_region_main_v_box.addLayout(select_region_h_box1)
         select_region_main_v_box.setSpacing(15)
-        euro_text = QLabel("Italy Covid report against European countries", self)
-        euro_text.setStyleSheet("border: 0.5px solid gray")
-        select_region_main_v_box.addWidget(euro_text)
+        self.euro_text = QLabel("Italy Covid report against European countries", self)
+        self.euro_text.setStyleSheet("border: 0.5px solid gray")
+        select_region_main_v_box.addWidget(self.euro_text)
         select_region_main_v_box.addLayout(select_region_h_box2)
         select_region_main_v_box.addStretch()
 
         # for region map and demographic
         region_map_box = QVBoxLayout()
-        coordinate = (41.29246,12.5736108)
+
+        self.coordinate_title = "This is a title"
+        self.coordinate = coordinate['Campania']
+
         m = folium.Map(
-            tiles='Stamen Terrain',
-            zoom_start=8,
-            location=coordinate
+            tiles="Stamen Terrain",
+            zoom_start=6,
+            location=self.coordinate
         )
+
+        # create HTML for pop up
+        def foliumHtml(lo):
+            # get stats
+            if lo != "Italy":
+                stats = self.core.getRegionStats(str(lo))
+                return f"""
+                 <h1 style='color:#7b113a;'> {lo} </h1>
+                 <hr/>
+                 <p style='color:#7b113a;font-size:20px;'>Region Population: {stats['region_population']}</p>
+                 <p style='color:#7b113a;font-size:20px;'>Total Covid Case: {stats['case_number']}</p>
+                 <p style='color:#7b113a;font-size:20px;'>Daily Cases: {stats['expectedChanges']}</p>
+                 <p style='color:#7b113a;font-size:20px;'>Percentage: {stats['percentage']}%</p>
+                 """
+            else:
+                return f"""
+                 <h1> {lo}</h1>
+                 <p>European country with a long Mediterranean coastline, has left a powerful mark on Western culture and cuisine.</p>
+                 """
+
+        # add marker one by one on the map
+        for lo in coordinate:
+            # add pop ups
+            html = foliumHtml(lo)
+            iframe = folium.IFrame(html=html, width=300, height=250)
+            popUp = folium.Popup(iframe, max_width=2650)
+            # Marker starts here
+            folium.Marker(
+                location=coordinate[lo],
+                popup=popUp,
+                icon=folium.DivIcon(html=f"""
+                     <div><svg>
+                         <circle cx="50" cy="50" r="40" fill="#7b113a" opacity=".4"/>
+                         <rect x="35", y="35" width="30" height="30", fill="#fff600", opacity=".3" 
+                     </svg></div>""")
+            ).add_to(m)
 
         # save map data to data object
         data = io.BytesIO()
@@ -120,6 +184,28 @@ class MainWindow(QWidget):
         h_box.addLayout(select_region_main_v_box)
         h_box.addLayout(region_map_box)
         self.setLayout(h_box)
+
+    # languageChanged clicked
+
+    @qt.pyqtSlot(int)
+    def languageChanged(self, index):
+        data = self.language_combobox.itemData(index)
+
+        translator = Translator()
+        # print(translator.translate('Hello.', dest=data).text)
+        # select language
+        self.language_lbl.setText(translator.translate('Select Language.', dest=data).text)
+        # selection headings
+        self.italy_lbl.setText(translator.translate('Italy Region Covid Report', dest=data).text)
+        self.euro_text.setText(translator.translate('Italy Covid report against european countries.', dest=data).text)
+        #
+        #
+        # # italy selection region text
+        self.select_region_label.setText(translator.translate('Select Region.', dest=data).text)
+        self.select_region_botton.setText(translator.translate('Check Region', dest=data).text)
+        # compare section
+        self.select_region_label.setText(translator.translate('Italy Against.', dest=data).text)
+        self.compare_button.setText(translator.translate('Compare.', dest=data).text)
 
     # this method when clicked get and display region statistics
     # italyRegionClicked
@@ -208,13 +294,24 @@ class MainWindow(QWidget):
         # 5 h rows
         r5_box = QHBoxLayout()
         r5_box.addStretch()
+        expected_changes_label = QLabel('Daily Cases  :', self)
+        expected_changes_label.setFont(QFont('Times', 25, QFont.Light))
+        expected_changes_text = QLabel(f"{stats['expectedChanges']}", self)
+        expected_changes_text.setFont(QFont('Times', 25, QFont.Light))
+        r5_box.addWidget(expected_changes_label)
+        r5_box.addWidget(expected_changes_text)
+        r5_box.addStretch()
+
+        # 6 h rows
+        r6_box = QHBoxLayout()
+        r6_box.addStretch()
         cal_percentage_label = QLabel('Percentage :', self)
         cal_percentage_label.setFont(QFont('Times', 25, QFont.Light))
         cal_percentage_text = QLabel(f"{stats['percentage']}%", self)
         cal_percentage_text.setFont(QFont('Times', 25, QFont.Light))
-        r5_box.addWidget(cal_percentage_label)
-        r5_box.addWidget(cal_percentage_text)
-        r5_box.addStretch()
+        r6_box.addWidget(cal_percentage_label)
+        r6_box.addWidget(cal_percentage_text)
+        r6_box.addStretch()
 
         # main v box
         main_v_box = QVBoxLayout()
@@ -229,6 +326,8 @@ class MainWindow(QWidget):
         main_v_box.addLayout(r4_box)
         # add row 5
         main_v_box.addLayout(r5_box)
+        # add row 6
+        main_v_box.addLayout(r6_box)
         main_v_box.addStretch()
 
         regionDialog.setLayout(main_v_box)
